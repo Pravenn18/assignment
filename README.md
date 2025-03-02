@@ -40,7 +40,7 @@ You can download the Android app directly from:
 
 1. Clone the repository:
    ```bash
-   git clone [https://github.com/yourusername/timer-app.git](https://github.com/Pravenn18/assignment.git](https://github.com/Pravenn18/assignment.git)
+   git clone https://github.com/Pravenn18/assignment.git
    cd assignment
    ```
 
