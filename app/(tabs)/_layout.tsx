@@ -3,10 +3,9 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { usePathname, useRouter } from "expo-router";
-import TimerListScreen from ".";
-import TimerHistoryScreen from "./explore";
+import TimerListScreen from "@/screen/TimerListScreen";
+import TimerHistoryScreen from "@/screen/TimerHistoryScreen";
 
-// Define Timer type
 export interface Timer {
   id: string;
   name: string;
@@ -16,7 +15,6 @@ export interface Timer {
   status: "Running" | "Paused" | "Completed";
 }
 
-// Define CompletedTimer type with timestamp
 export interface CompletedTimer extends Timer {
   completedAt: number;
 }
@@ -27,11 +25,9 @@ export default function AppLayout() {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Load timers and history from storage on app start
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Load active timers
         const savedTimers = await AsyncStorage.getItem("timers");
         if (savedTimers !== null) {
           const parsedTimers = JSON.parse(savedTimers);
@@ -39,7 +35,6 @@ export default function AppLayout() {
           setTimers(parsedTimers);
         }
 
-        // Load timer history
         const savedHistory = await AsyncStorage.getItem("timerHistory");
         if (savedHistory !== null) {
           const parsedHistory = JSON.parse(savedHistory);
@@ -56,7 +51,6 @@ export default function AppLayout() {
     loadData();
   }, []);
 
-  // Save timers to storage whenever they change
   useEffect(() => {
     const saveTimers = async () => {
       try {
@@ -70,7 +64,6 @@ export default function AppLayout() {
     saveTimers();
   }, [timers]);
 
-  // Save completed timers to storage whenever they change
   useEffect(() => {
     const saveHistory = async () => {
       try {
@@ -89,7 +82,6 @@ export default function AppLayout() {
     }
   }, [completedTimers]);
 
-  // Add a new timer
   const addTimer = (timer: Omit<Timer, "id" | "status" | "remainingTime">) => {
     const newTimer: Timer = {
       ...timer,
@@ -100,14 +92,12 @@ export default function AppLayout() {
     setTimers((prevTimers) => [...prevTimers, newTimer]);
   };
 
-  // Update timer (for start, pause, reset, etc.)
   const updateTimer = (updatedTimer: Timer) => {
     setTimers((prevTimers) => {
       const newTimers = prevTimers.map((timer) =>
         timer.id === updatedTimer.id ? updatedTimer : timer
       );
 
-      // If the timer just completed, add it to history
       if (
         updatedTimer.status === "Completed" &&
         updatedTimer.remainingTime === 0
@@ -117,13 +107,11 @@ export default function AppLayout() {
           completedAt: Date.now(),
         };
 
-        // Check if it already exists in completed timers before adding
         const existingIndex = completedTimers.findIndex(
           (t) => t.id === completedTimer.id
         );
 
         if (existingIndex === -1) {
-          // Add the completed timer to the history list without direct AsyncStorage call
           setCompletedTimers((prev) => [...prev, completedTimer]);
         }
       }
@@ -132,7 +120,6 @@ export default function AppLayout() {
     });
   };
 
-  // Bulk actions for timers in a category
   const performBulkAction = (
     category: string,
     action: "start" | "pause" | "reset"
@@ -160,21 +147,16 @@ export default function AppLayout() {
     );
   };
 
-  // Clear all history
   const clearHistory = () => {
     setCompletedTimers([]);
-    // The useEffect will handle the AsyncStorage update
   };
 
-  // Remove single history item
   const removeHistoryItem = (id: string) => {
     setCompletedTimers((prev) => prev.filter((timer) => timer.id !== id));
-    // The useEffect will handle the AsyncStorage update
   };
 
-  // Render appropriate screen based on path
   const renderScreen = () => {
-    // Explicitly check for history screen path
+    console.log("pathname", pathname);
     if (pathname === "/explore") {
       return (
         <TimerListScreen
@@ -195,7 +177,6 @@ export default function AppLayout() {
     );
   };
 
-  // Use a consistent wrapper for both screens
   return (
     <SafeAreaProvider>
       <StatusBar style="auto" />
