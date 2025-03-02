@@ -1,50 +1,90 @@
-# Welcome to your Expo app 👋
+# React Native Timer App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A comprehensive timer application built with React Native and Expo. This app allows users to create, manage, and track multiple timers organized by categories.
 
-## Get started
+## Features
 
-1. Install dependencies
+- Create timers with custom names, durations, and categories
+- Group timers by categories with bulk actions (start, pause, reset)
+- Real-time progress tracking with visual indicators
+- Notifications at halfway point and completion
+- View and export timer history
+- Filter timers by category
 
+## Tech Stack
+
+- React Native
+- Expo
+- Expo Router for navigation
+- AsyncStorage for local data persistence
+- React Native Safe Area Context
+- Expo File System & Sharing for exporting data
+
+## Download and Installation
+
+### Android App
+
+You can download the Android app directly from:
+- Download the APK file from the [Here](https://expo.dev/accounts/pravenn/projects/assignment/builds/24488bc1-c00a-46a4-aa83-b407b42fdd4f)
+
+### Setup Development Environment
+
+#### Prerequisites
+
+- Node.js (v14 or newer)
+- npm or yarn
+- Expo CLI
+- iOS Simulator/Android Emulator or physical device
+
+#### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/timer-app.git](https://github.com/Pravenn18/assignment.git
+   cd assignment
+   ```
+
+2. Install dependencies:
    ```bash
    npm install
+   # or
+   yarn install
    ```
 
-2. Start the app
-
+3. Start the development server:
    ```bash
-    npx expo start
+   yarn start
    ```
 
-In the output, you'll find options to open the app in a
+4. Run on device/simulator:
+   - Press `i` for iOS simulator
+   - Press `a` for Android emulator
+   - Scan the QR code with the Expo Go app on your physical device
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Project Structure
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- `app/(tabs)/_layout.tsx` - Main app layout and state management
+- `app/(tabs)/index.tsx` - Timer list screen
+- `app/(tabs)/explore.tsx` - Timer history screen
 
-## Get a fresh project
+## Development Assumptions
 
-When you're ready, run:
+1. **User Experience**:
+   - Users need visual feedback during timer progress
+   - Category-based organization improves usability
+   - Users want to be notified at key points (halfway, completion)
 
-```bash
-npm run reset-project
-```
+2. **Data Management**:
+   - Timers should persist between app sessions using AsyncStorage
+   - History of completed timers should be maintained
+   - Export functionality is important for data backup
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+3. **Technical**:
+   - App should work on both iOS and Android
+   - UI should respect safe areas across different devices
+   - Performance optimization for potentially many timers
 
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+4. **Extended Usage**:
+   - Users may create multiple categories of timers
+   - Some timers may be used repeatedly (reset functionality)
+   - Users will want to perform bulk actions on timers
