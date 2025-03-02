@@ -16,7 +16,6 @@ import { Picker } from "@react-native-picker/picker";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Timer } from "./_layout";
-import { router } from "expo-router";
 
 interface TimerListScreenProps {
   timers: Timer[];
@@ -30,6 +29,7 @@ interface TimerListScreenProps {
     category: string,
     action: "start" | "pause" | "reset"
   ) => void;
+  navigateToHistory: () => void;
 }
 
 const DEFAULT_CATEGORIES = [
@@ -45,18 +45,19 @@ const TimerListScreen: React.FC<TimerListScreenProps> = ({
   addTimer,
   updateTimer,
   performBulkAction,
+  navigateToHistory,
 }) => {
   // State for categories and animations
   const [expandedCategories, setExpandedCategories] = useState<
     Record<string, boolean>
   >({});
   const animatedValues = useRef<Record<string, Animated.Value>>({});
-
   // State for modals
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [completedModalVisible, setCompletedModalVisible] = useState(false);
+  const [halfwayModalVisible, setHalfwayModalVisible] = useState(false);
   const [completedTimer, setCompletedTimer] = useState<Timer | null>(null);
-
+  const [halfwayTimer, setHalfwayTimer] = useState<Timer | null>(null);
   // State for new timer form
   const [name, setName] = useState("");
   const [duration, setDuration] = useState("");
@@ -65,24 +66,30 @@ const TimerListScreen: React.FC<TimerListScreenProps> = ({
   const [showCustomCategory, setShowCustomCategory] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Category filter state
+  const [filterCategory, setFilterCategory] = useState<string>("All");
+  const [halfwayNotificationSent, setHalfwayNotificationSent] = useState<
+    Record<string, boolean>
+  >({});
+
+  // Get the list of unique categories for the filter
+  const allCategories = [...new Set(timers.map((timer) => timer.category))];
+
   // Initialize expanded categories and animations
   useEffect(() => {
     const categories = [...new Set(timers.map((timer) => timer.category))];
     const newExpandedState: Record<string, boolean> = {};
-
     categories.forEach((category) => {
       // Initialize all categories as expanded
       newExpandedState[category] =
         expandedCategories[category] !== undefined
           ? expandedCategories[category]
           : true;
-
       // Initialize animation values for each category if not already present
       if (!animatedValues.current[category]) {
         animatedValues.current[category] = new Animated.Value(1);
       }
     });
-
     setExpandedCategories(newExpandedState);
   }, [timers]);
 
@@ -96,20 +103,38 @@ const TimerListScreen: React.FC<TimerListScreenProps> = ({
             remainingTime: timer.remainingTime - 1,
           };
 
+          // Check if timer just hit 50%
+          const halfwayPoint = Math.floor(timer.duration / 2);
+          if (
+            updatedTimer.remainingTime === halfwayPoint &&
+            !halfwayNotificationSent[timer.id]
+          ) {
+            setHalfwayTimer(updatedTimer);
+            setHalfwayModalVisible(true);
+            // Mark this timer as having had its 50% notification
+            setHalfwayNotificationSent((prev) => ({
+              ...prev,
+              [timer.id]: true,
+            }));
+          }
+
           // Check if timer just completed
           if (updatedTimer.remainingTime === 0) {
             updatedTimer.status = "Completed";
             setCompletedTimer(updatedTimer);
             setCompletedModalVisible(true);
+            // Reset the halfway notification state for this timer
+            setHalfwayNotificationSent((prev) => ({
+              ...prev,
+              [timer.id]: false,
+            }));
           }
-
           updateTimer(updatedTimer);
         }
       });
     }, 1000);
-
     return () => clearInterval(timerInterval);
-  }, [timers, updateTimer]);
+  }, [timers, updateTimer, halfwayNotificationSent]);
 
   // Handle adding a new timer
   const handleAddTimer = () => {
@@ -118,26 +143,22 @@ const TimerListScreen: React.FC<TimerListScreenProps> = ({
       setFormError("Please enter a timer name");
       return;
     }
-
     const durationInSeconds = parseInt(duration);
     if (isNaN(durationInSeconds) || durationInSeconds <= 0) {
       setFormError("Please enter a valid duration in seconds");
       return;
     }
-
     const selectedCategory = showCustomCategory ? newCategory : category;
     if (!selectedCategory.trim()) {
       setFormError("Please enter a category");
       return;
     }
-
     // Add the timer
     addTimer({
       name: name.trim(),
       duration: durationInSeconds,
       category: selectedCategory.trim(),
     });
-
     // Reset the form and close modal
     setName("");
     setDuration("");
@@ -152,14 +173,12 @@ const TimerListScreen: React.FC<TimerListScreenProps> = ({
   const toggleCategory = (category: string) => {
     setExpandedCategories((prev) => {
       const newState = { ...prev, [category]: !prev[category] };
-
       // Animate the expansion/collapse
       Animated.timing(animatedValues.current[category], {
         toValue: newState[category] ? 1 : 0,
         duration: 300,
         useNativeDriver: false,
       }).start();
-
       return newState;
     });
   };
@@ -187,43 +206,87 @@ const TimerListScreen: React.FC<TimerListScreenProps> = ({
     }
   };
 
-  // Get the list of unique categories
-  const categories = [...new Set(timers.map((timer) => timer.category))];
-  const dd = () => {
-    router.push("./explore.tsx");
+  // Reset a timer's notification status when it's reset
+  const handleResetTimer = (timer: Timer) => {
+    updateTimer({
+      ...timer,
+      status: "Paused",
+      remainingTime: timer.duration,
+    });
+
+    // Reset the halfway notification flag for this timer
+    setHalfwayNotificationSent((prev) => ({
+      ...prev,
+      [timer.id]: false,
+    }));
   };
+
+  // Get the list of categories to display based on filter
+  const categoriesToDisplay =
+    filterCategory === "All"
+      ? [...new Set(timers.map((timer) => timer.category))]
+      : [filterCategory];
+
+  // Filter timers based on selected category
+  const filteredTimers =
+    filterCategory === "All"
+      ? timers
+      : timers.filter((timer) => timer.category === filterCategory);
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Interview Timers</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setAddModalVisible(true)}
-        >
-          <Ionicons name="add" size={24} color="white" />
-        </TouchableOpacity>
+        <Text style={styles.title}>Timers</Text>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.historyButton}
+            onPress={navigateToHistory}
+          >
+            <Ionicons name="time-outline" size={22} color="white" />
+            <Text style={styles.historyButtonText}>History</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setAddModalVisible(true)}
+          >
+            <Ionicons name="add" size={24} color="white" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {timers.length === 0 ? (
+      {/* Category Filter */}
+      <View style={styles.filterContainer}>
+        <Text style={styles.filterLabel}>Filter by category:</Text>
+        <View style={styles.filterPickerContainer}>
+          <Picker
+            selectedValue={filterCategory}
+            onValueChange={(itemValue) => setFilterCategory(itemValue)}
+            style={styles.filterPicker}
+          >
+            <Picker.Item label="All Categories" value="All" />
+            {allCategories.map((cat) => (
+              <Picker.Item key={cat} label={cat} value={cat} />
+            ))}
+          </Picker>
+        </View>
+      </View>
+
+      {filteredTimers.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="timer-outline" size={50} color="#ccc" />
-          <Text style={styles.emptyStateText}>No timers yet</Text>
+          <Text style={styles.emptyStateText}>No timers found</Text>
           <Text style={styles.emptyStateSubtext}>
-            Tap the + button to create your first timer
+            {timers.length === 0
+              ? "Tap the + button to create your first timer"
+              : "Try changing your category filter"}
           </Text>
         </View>
       ) : (
         <ScrollView style={styles.scrollContainer}>
-          {categories.map((category) => {
-            const categoryTimers = timers.filter(
+          {categoriesToDisplay.map((category) => {
+            const categoryTimers = filteredTimers.filter(
               (timer) => timer.category === category
             );
-            const maxHeight = animatedValues.current[category]?.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, 54 * categoryTimers.length],
-            });
-
             return (
               <View key={category} style={styles.categoryContainer}>
                 {/* Category Header */}
@@ -246,7 +309,6 @@ const TimerListScreen: React.FC<TimerListScreenProps> = ({
                       {categoryTimers.length} timers
                     </Text>
                   </TouchableOpacity>
-
                   {/* Category Bulk Actions */}
                   <View style={styles.bulkActions}>
                     <TouchableOpacity
@@ -255,14 +317,12 @@ const TimerListScreen: React.FC<TimerListScreenProps> = ({
                     >
                       <Ionicons name="play" size={16} color="white" />
                     </TouchableOpacity>
-
                     <TouchableOpacity
                       style={[styles.bulkActionButton, styles.pauseButton]}
                       onPress={() => performBulkAction(category, "pause")}
                     >
                       <Ionicons name="pause" size={16} color="white" />
                     </TouchableOpacity>
-
                     <TouchableOpacity
                       style={[styles.bulkActionButton, styles.resetButton]}
                       onPress={() => performBulkAction(category, "reset")}
@@ -271,108 +331,107 @@ const TimerListScreen: React.FC<TimerListScreenProps> = ({
                     </TouchableOpacity>
                   </View>
                 </View>
-
                 {/* Timers in this category */}
-                <Animated.View
-                  style={[
-                    styles.timersList,
-                    { maxHeight: maxHeight, overflow: "hidden" },
-                  ]}
-                >
-                  {categoryTimers.map((timer) => {
-                    const progressPercentage = Math.max(
-                      0,
-                      Math.min(
-                        100,
-                        (timer.remainingTime / timer.duration) * 100
-                      )
-                    );
-
-                    return (
-                      <View key={timer.id} style={styles.timerItem}>
-                        <View style={styles.timerInfo}>
-                          <Text style={styles.timerName}>{timer.name}</Text>
-                          <Text style={styles.timerTime}>
-                            {formatTime(timer.remainingTime)}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.timerStatus,
-                              { color: getStatusColor(timer.status) },
-                            ]}
-                          >
-                            {timer.status}
-                          </Text>
-                        </View>
-
-                        {/* Progress Bar */}
-                        <View
-                          style={[
-                            styles.progressBarContainer,
-                            { backgroundColor: "red" },
-                          ]}
-                        >
-                          <View
-                            style={[
-                              styles.progressBar,
-                              { width: `${progressPercentage}%` },
-                            ]}
-                          />
-                        </View>
-
-                        {/* Timer Controls */}
-                        <View style={styles.timerControls}>
-                          {timer.status !== "Completed" && (
-                            <TouchableOpacity
+                {expandedCategories[category] && (
+                  <ScrollView
+                    style={[
+                      styles.timersList,
+                      { maxHeight: categoryTimers.length > 2 ? 200 : null },
+                    ]}
+                    nestedScrollEnabled={true}
+                  >
+                    {categoryTimers.map((timer) => {
+                      const progressPercentage = Math.max(
+                        0,
+                        Math.min(
+                          100,
+                          (timer.remainingTime / timer.duration) * 100
+                        )
+                      );
+                      return (
+                        <View key={timer.id} style={styles.timerItem}>
+                          <View style={styles.timerInfo}>
+                            <Text style={styles.timerName}>{timer.name}</Text>
+                            <Text style={styles.timerTime}>
+                              {formatTime(timer.remainingTime)}
+                            </Text>
+                            <Text
                               style={[
-                                styles.timerControl,
-                                styles.startControl,
-                                timer.status === "Running" &&
-                                  styles.disabledButton,
+                                styles.timerStatus,
+                                { color: getStatusColor(timer.status) },
                               ]}
-                              onPress={() =>
-                                updateTimer({ ...timer, status: "Running" })
-                              }
-                              disabled={timer.status === "Running"}
+                            >
+                              {timer.status}
+                            </Text>
+                          </View>
+                          {/* Progress Bar */}
+                          <View style={styles.progressBarContainer}>
+                            <View
+                              style={[
+                                styles.progressBar,
+                                { width: `${progressPercentage}%` },
+                              ]}
+                            />
+                          </View>
+                          {/* Timer Controls */}
+                          <View style={styles.timerControls}>
+                            {timer.status !== "Completed" && (
+                              <TouchableOpacity
+                                style={[
+                                  styles.timerControl,
+                                  styles.startControl,
+                                  timer.status === "Running" &&
+                                    styles.disabledButton,
+                                ]}
+                                onPress={() =>
+                                  updateTimer({ ...timer, status: "Running" })
+                                }
+                                disabled={timer.status === "Running"}
+                              >
+                                <Ionicons
+                                  name="play"
+                                  size={18}
+                                  color={
+                                    timer.status === "Running"
+                                      ? "#aaa"
+                                      : "white"
+                                  }
+                                />
+                              </TouchableOpacity>
+                            )}
+                            {timer.status === "Running" && (
+                              <TouchableOpacity
+                                style={[
+                                  styles.timerControl,
+                                  styles.pauseControl,
+                                ]}
+                                onPress={() =>
+                                  updateTimer({ ...timer, status: "Paused" })
+                                }
+                              >
+                                <Ionicons
+                                  name="pause"
+                                  size={18}
+                                  color="white"
+                                />
+                              </TouchableOpacity>
+                            )}
+                            <TouchableOpacity
+                              style={[styles.timerControl, styles.resetControl]}
+                              onPress={() => handleResetTimer(timer)}
                             >
                               <Ionicons
-                                name="play"
+                                name="refresh"
                                 size={18}
-                                color={
-                                  timer.status === "Running" ? "#aaa" : "white"
-                                }
+                                color="white"
                               />
                             </TouchableOpacity>
-                          )}
-
-                          {timer.status === "Running" && (
-                            <TouchableOpacity
-                              style={[styles.timerControl, styles.pauseControl]}
-                              onPress={() =>
-                                updateTimer({ ...timer, status: "Paused" })
-                              }
-                            >
-                              <Ionicons name="pause" size={18} color="white" />
-                            </TouchableOpacity>
-                          )}
-
-                          <TouchableOpacity
-                            style={[styles.timerControl, styles.resetControl]}
-                            onPress={() =>
-                              updateTimer({
-                                ...timer,
-                                status: "Paused",
-                                remainingTime: timer.duration,
-                              })
-                            }
-                          >
-                            <Ionicons name="refresh" size={18} color="white" />
-                          </TouchableOpacity>
+                          </View>
                         </View>
-                      </View>
-                    );
-                  })}
-                </Animated.View>
+                      );
+                    })}
+                  </ScrollView>
+                )}
               </View>
             );
           })}
@@ -404,9 +463,7 @@ const TimerListScreen: React.FC<TimerListScreenProps> = ({
                 <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
-
             {formError && <Text style={styles.errorText}>{formError}</Text>}
-
             <ScrollView style={styles.formContainer}>
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Timer Name:</Text>
@@ -417,7 +474,6 @@ const TimerListScreen: React.FC<TimerListScreenProps> = ({
                   placeholder="Enter timer name (e.g., Coding Interview)"
                 />
               </View>
-
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Duration (in seconds):</Text>
                 <TextInput
@@ -428,7 +484,6 @@ const TimerListScreen: React.FC<TimerListScreenProps> = ({
                   keyboardType="numeric"
                 />
               </View>
-
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Category:</Text>
                 {!showCustomCategory ? (
@@ -451,7 +506,6 @@ const TimerListScreen: React.FC<TimerListScreenProps> = ({
                     placeholder="Enter custom category"
                   />
                 )}
-
                 <TouchableOpacity
                   onPress={() => setShowCustomCategory(!showCustomCategory)}
                   style={styles.toggleButton}
@@ -464,7 +518,6 @@ const TimerListScreen: React.FC<TimerListScreenProps> = ({
                 </TouchableOpacity>
               </View>
             </ScrollView>
-
             <TouchableOpacity
               style={styles.submitButton}
               onPress={handleAddTimer}
@@ -494,6 +547,30 @@ const TimerListScreen: React.FC<TimerListScreenProps> = ({
               onPress={() => setCompletedModalVisible(false)}
             >
               <Text style={styles.closeModalButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Halfway Point Modal */}
+      <Modal
+        transparent={true}
+        visible={halfwayModalVisible}
+        animationType="fade"
+        onRequestClose={() => setHalfwayModalVisible(false)}
+      >
+        <View style={styles.completedModalOverlay}>
+          <View style={styles.completedModalContent}>
+            <Ionicons name="alert-circle" size={60} color="#ff9800" />
+            <Text style={styles.alertText}>Halfway Point!</Text>
+            <Text style={styles.completedTimerText}>
+              "{halfwayTimer?.name}" timer has reached 50%!
+            </Text>
+            <TouchableOpacity
+              style={styles.closeModalButton}
+              onPress={() => setHalfwayModalVisible(false)}
+            >
+              <Text style={styles.closeModalButtonText}>Continue</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -615,14 +692,13 @@ const styles = StyleSheet.create({
   timerItem: {
     padding: 15,
     borderBottomWidth: 1,
-    borderBottomColor: "red",
+    borderBottomColor: "#e0e0e0",
   },
   timerInfo: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 10,
-    backgroundColor: "red",
   },
   timerName: {
     fontSize: 16,
@@ -795,6 +871,59 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 16,
     fontWeight: "bold",
+  },
+  headerButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  historyButton: {
+    backgroundColor: "#9c27b0",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  historyButtonText: {
+    color: "white",
+    fontWeight: "bold",
+    marginLeft: 5,
+  },
+  // Styles for filter and halfway notification
+  filterContainer: {
+    backgroundColor: "white",
+    padding: 15,
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+  },
+  filterLabel: {
+    fontSize: 16,
+    fontWeight: "500",
+    marginRight: 10,
+  },
+  filterPickerContainer: {
+    flex: 1,
+    backgroundColor: "#f9f9f9",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#ddd",
+  },
+  filterPicker: {
+    height: 60,
+  },
+  alertText: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginTop: 15,
+    color: "#ff9800",
   },
 });
 
